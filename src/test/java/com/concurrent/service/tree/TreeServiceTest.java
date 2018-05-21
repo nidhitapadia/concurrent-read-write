@@ -27,21 +27,23 @@ public class TreeServiceTest {
         long timeElapsedReadWriteLock;
         long timeElapsedSynchronizedLock;
         long timeElapsedStampedLock;
+        final int NUMBER_OF_THREADS = 100;
+        final int NUMBER_OF_ITERATIONS = 200;
 
         long startTimeMillis = System.currentTimeMillis();
-        executeTask(readWriteLockService, 1L, 100, 10);
+        executeTask(readWriteLockService, 1L, NUMBER_OF_THREADS, NUMBER_OF_ITERATIONS);
         timeElapsedReadWriteLock = getTimeElapsedInMillis(startTimeMillis);
 
         System.out.println("********************* ReadWriteLock Task finished***************************");
 
         startTimeMillis = System.currentTimeMillis();
-        executeTask(synchronizedService, 1L, 100, 10);
+        executeTask(synchronizedService, 1L, NUMBER_OF_THREADS, NUMBER_OF_ITERATIONS);
         timeElapsedSynchronizedLock = getTimeElapsedInMillis(startTimeMillis);
 
         System.out.println("********************* Synchronised Task finished***************************");
 
         startTimeMillis = System.currentTimeMillis();
-        executeTask(stampedLockService, 1L, 100, 10);
+        executeTask(stampedLockService, 1L, NUMBER_OF_THREADS, NUMBER_OF_ITERATIONS);
         timeElapsedStampedLock = getTimeElapsedInMillis(startTimeMillis);
 
         System.out.println("********************* StampedLock Task finished***************************");
@@ -54,11 +56,11 @@ public class TreeServiceTest {
 
     private void executeTask(LockService<ConcurrentTreeMap<Long, String>, Map.Entry<Long, String>> lockService,
                              Long keyValue,
-                             int threads,
-                             int rounds) {
-        for (int round = 0; round < rounds; round++) {
-            readWriteExecutor = Executors.newFixedThreadPool(threads);
-            for (int j = 0; j < threads; j += 2) {
+                             int numberOfThreads,
+                             int numberOfIterations) {
+        for (int iteration = 0; iteration < numberOfIterations; iteration++) {
+            readWriteExecutor = Executors.newFixedThreadPool(numberOfThreads);
+            for (int j = 0; j < numberOfThreads; j += 2) {
                 readWriteExecutor.execute(getReadTask(lockService));
                 readWriteExecutor.execute(getWriteTask(lockService, keyValue++));
             }

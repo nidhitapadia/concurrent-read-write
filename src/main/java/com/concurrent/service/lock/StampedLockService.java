@@ -23,18 +23,23 @@ public class StampedLockService<T extends ConcurrentObject<?, V>, V> extends Loc
 
     @Override
     public void readObject(T object) {
-        long stamp = stampedLock.tryOptimisticRead();
-
-        if (!stampedLock.validate(stamp)) {
-            stamp = stampedLock.readLock();
-            try {
-                printNow(object);
-            } finally {
-                stampedLock.unlockRead(stamp);
-            }
-        } else {
+        long stamp = stampedLock.readLock();
+        try {
             printNow(object);
+        } finally {
+            stampedLock.unlockRead(stamp);
         }
+
+//        if (!stampedLock.validate(stamp)) {
+//            stamp = stampedLock.readLock();
+//            try {
+//                printNow(object);
+//            } finally {
+//                stampedLock.unlockRead(stamp);
+//            }
+//        } else {
+//            printNow(object);
+//        }
     }
 
     private void printNow(T object) {
