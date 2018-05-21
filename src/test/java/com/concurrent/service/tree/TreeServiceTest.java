@@ -1,11 +1,14 @@
 package com.concurrent.service.tree;
 
 
-import org.junit.Assert;
-import org.junit.Before;
+import com.concurrent.service.lock.LockService;
+import com.concurrent.service.lock.ReadWriteLockService;
+import com.concurrent.service.lock.StampedLockService;
+import com.concurrent.service.lock.SynchronizedService;
 import org.junit.Test;
 
 import java.util.AbstractMap;
+import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -13,56 +16,82 @@ import java.util.concurrent.TimeUnit;
 
 public class TreeServiceTest {
 
-    private TreeMap<Long, String> treeMap = null;
-    private TreeService treeService = null;
-    private ExecutorService readExecutorService = null;
-    private ExecutorService writeExecutorService = null;
-    private Long keyValue = 1L;
-
-    @Before
-    public void setup() {
-        treeMap = new TreeMap<>();
-        treeService = new TreeService(treeMap);
-    }
+    private ExecutorService readWriteExecutor = null;
 
     @Test
     public void testConcurrentReadWriteTask() {
-        readExecutorService = Executors.newFixedThreadPool(5);
-        writeExecutorService = Executors.newFixedThreadPool(1);
 
-        Assert.assertTrue(treeMap.isEmpty());
+        ReadWriteLockService readWriteLockService = new ReadWriteLockService(newConcurrentTreeMap());
+        SynchronizedService synchronizedService = new SynchronizedService(newConcurrentTreeMap());
+        StampedLockService stampedLockService = new StampedLockService(newConcurrentTreeMap());
+        long timeElapsedReadWriteLock;
+        long timeElapsedSynchronizedLock;
+        long timeElapsedStampedLock;
+
         long startTimeMillis = System.currentTimeMillis();
-        while (getTimeElapsedInMillis(startTimeMillis) < 10000) {
-            readExecutorService.submit(getReadTask(treeService));
-            writeExecutorService.submit(getWriteTask(treeService, keyValue++));
-        }
-        readExecutorService.shutdownNow();
-        writeExecutorService.shutdownNow();
-        Assert.assertFalse(treeMap.isEmpty());
+        executeTask(readWriteLockService, 1L, 100, 10);
+        timeElapsedReadWriteLock = getTimeElapsedInMillis(startTimeMillis);
+
+        System.out.println("********************* ReadWriteLock Task finished***************************");
+
+        startTimeMillis = System.currentTimeMillis();
+        executeTask(synchronizedService, 1L, 100, 10);
+        timeElapsedSynchronizedLock = getTimeElapsedInMillis(startTimeMillis);
+
+        System.out.println("********************* Synchronised Task finished***************************");
+
+        startTimeMillis = System.currentTimeMillis();
+        executeTask(stampedLockService, 1L, 100, 10);
+        timeElapsedStampedLock = getTimeElapsedInMillis(startTimeMillis);
+
+        System.out.println("********************* StampedLock Task finished***************************");
+
+        System.out.println("timeElapsedReadWriteLock : " + timeElapsedReadWriteLock);
+        System.out.println("timeElapsedSynchronizedLock : " + timeElapsedSynchronizedLock);
+        System.out.println("timeElapsedStampedLock : " + timeElapsedStampedLock);
+
     }
 
-    @Test
-    public void testConcurrentWriteTask() {
-        writeExecutorService = Executors.newFixedThreadPool(2);
-
-        Assert.assertTrue(treeMap.isEmpty());
-        long startTimeMillis = System.currentTimeMillis();
-        while (getTimeElapsedInMillis(startTimeMillis) < 10000) {
-            writeExecutorService.submit(getWriteTask(treeService, keyValue++));
+    private void executeTask(LockService<ConcurrentTreeMap<Long, String>, Map.Entry<Long, String>> lockService,
+                             Long keyValue,
+                             int threads,
+                             int rounds) {
+        for (int round = 0; round < rounds; round++) {
+            readWriteExecutor = Executors.newFixedThreadPool(threads);
+            for (int j = 0; j < threads; j += 2) {
+                readWriteExecutor.execute(getReadTask(lockService));
+                readWriteExecutor.execute(getWriteTask(lockService, keyValue++));
+            }
+            readWriteExecutor.shutdown();
+            try {
+                readWriteExecutor.awaitTermination(10, TimeUnit.MINUTES);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
-        writeExecutorService.shutdownNow();
 
-        Assert.assertFalse(treeMap.isEmpty());
     }
 
     private long getTimeElapsedInMillis(long startTimeMillis) {
         return System.currentTimeMillis() - startTimeMillis;
     }
 
-    private static Runnable getReadTask(TreeService treeService) {
+    private static Runnable getReadTask(LockService<ConcurrentTreeMap<Long, String>, Map.Entry<Long, String>> lockService) {
+        return () -> {
+            lockService.readObject();
+        };
+    }
+
+    private static Runnable getWriteTask(LockService<ConcurrentTreeMap<Long, String>, Map.Entry<Long, String>> lockService, Long value) {
+        return () -> {
+            lockService.modifyObject(new AbstractMap.SimpleEntry<>(value, String.valueOf(value)));
+        };
+    }
+
+    private static Runnable getReadTaskWithDelay(ReadWriteLockService treeService) {
         return () -> {
             try {
-                treeService.readAndPrintValues();
+                treeService.readObject();
                 TimeUnit.MILLISECONDS.sleep((int) (100 * Math.random() + 10));
             } catch (InterruptedException e) {
                 e.printStackTrace();
@@ -70,15 +99,19 @@ public class TreeServiceTest {
         };
     }
 
-    private static Runnable getWriteTask(TreeService treeService, Long value) {
+    private static Runnable getWriteTaskWithDelay(ReadWriteLockService treeService, Long value) {
         return () -> {
             try {
-                treeService.writeValue(new AbstractMap.SimpleEntry<>(value, String.valueOf(value)));
+                treeService.modifyObject(new AbstractMap.SimpleEntry<>(value, String.valueOf(value)));
                 TimeUnit.MILLISECONDS.sleep(1000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         };
+    }
+
+    private ConcurrentTreeMap<TreeMap<Long, String>, Map.Entry<Long, String>> newConcurrentTreeMap() {
+        return new ConcurrentTreeMap<TreeMap<Long, String>, Map.Entry<Long, String>>(new TreeMap<>());
     }
 
 }
